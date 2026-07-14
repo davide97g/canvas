@@ -1,40 +1,39 @@
-import { mkdirSync } from 'fs'
 import { join } from 'path'
 import { NodeSqliteWrapper, SQLiteSyncStorage, TLSocketRoom } from '@tldraw/sync-core'
 import Database from 'better-sqlite3'
+import { ROOMS_DIR, isValidRoomSlug } from './config'
 
-// For this example we're saving data to a SQLite database on the local filesystem
-const DIR = './.rooms'
-mkdirSync(DIR, { recursive: true })
+// Each room is persisted to its own SQLite database via SQLiteSyncStorage.
+// SQLiteSyncStorage debounces + persists changes automatically and is the
+// production-ready path shipped with @tldraw/sync-core, so we simply point it
+// at $DATA_DIR/rooms/<slug>.db instead of the template's ./.rooms directory.
 
-// Sanitize roomId to prevent path traversal attacks
-function sanitizeRoomId(roomId: string): string {
-	return roomId.replace(/[^a-zA-Z0-9_-]/g, '_')
-}
-
-// We'll keep an in-memory map of active rooms
-const rooms = new Map<string, TLSocketRoom<any, void>>()
+// In-memory map of active rooms (one TLSocketRoom per room, globally — hence
+// the deployment MUST run a single replica).
+const rooms = new Map<string, { room: TLSocketRoom<any, void>; db: Database.Database }>()
 
 export function makeOrLoadRoom(roomId: string): TLSocketRoom<any, void> {
-	roomId = sanitizeRoomId(roomId)
-
-	const existing = rooms.get(roomId)
-	if (existing && !existing.isClosed()) {
-		return existing
+	if (!isValidRoomSlug(roomId)) {
+		throw new Error(`Invalid room id: ${roomId}`)
 	}
 
-	console.log('loading room', roomId)
-	// Open the database - file is created if it doesn't exist
-	const db = new Database(join(DIR, `${roomId}.db`))
+	const existing = rooms.get(roomId)
+	if (existing && !existing.room.isClosed()) {
+		return existing.room
+	}
+
+	console.log('[rooms] loading room', roomId)
+	// Open (or create) the room's database.
+	const db = new Database(join(ROOMS_DIR, `${roomId}.db`))
 	const sql = new NodeSqliteWrapper(db)
 	const storage = new SQLiteSyncStorage({ sql })
 
-	const room = new TLSocketRoom({
+	const room = new TLSocketRoom<any, void>({
 		storage,
 		onSessionRemoved(room, args) {
-			console.log('client disconnected', args.sessionId, roomId)
+			console.log('[rooms] client disconnected', args.sessionId, roomId)
 			if (args.numSessionsRemaining === 0) {
-				console.log('closing room', roomId)
+				console.log('[rooms] closing room', roomId)
 				room.close()
 				db.close()
 				rooms.delete(roomId)
@@ -42,6 +41,6 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom<any, void> {
 		},
 	})
 
-	rooms.set(roomId, room)
+	rooms.set(roomId, { room, db })
 	return room
 }
