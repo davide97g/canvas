@@ -10,10 +10,12 @@ import type { RawData } from 'ws'
 import { loadAsset, storeAsset } from './assets'
 import { auth, getSessionFromHeaders, migrateAuth, seedAdminUser } from './auth'
 import {
+	BETTER_AUTH_URL,
 	IS_PRODUCTION,
 	MAX_UPLOAD_BYTES,
 	PORT,
 	R2_ENABLED,
+	TRUSTED_ORIGINS,
 	isValidRoomSlug,
 } from './config'
 import { makeOrLoadRoom } from './rooms'
@@ -49,9 +51,13 @@ async function main() {
 		timeWindow: '1 minute',
 	})
 
-	// CORS: credentialed. Same-origin in production; the Vite dev server proxies
-	// requests in development so this stays permissive-but-credentialed.
-	await app.register(cors, { origin: true, credentials: true })
+	// CORS: credentialed. In production only the app's own origin (plus any
+	// TRUSTED_ORIGINS) may make credentialed requests; in dev the Vite proxy
+	// makes everything same-origin so reflecting is safe.
+	await app.register(cors, {
+		origin: IS_PRODUCTION ? [BETTER_AUTH_URL, ...TRUSTED_ORIGINS] : true,
+		credentials: true,
+	})
 
 	await app.register(websocketPlugin)
 

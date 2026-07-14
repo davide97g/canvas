@@ -30,6 +30,9 @@ export const BETTER_AUTH_URL =
 if (IS_PRODUCTION && !process.env.BETTER_AUTH_SECRET) {
 	throw new Error('BETTER_AUTH_SECRET is required in production')
 }
+if (IS_PRODUCTION && (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+	throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD are required in production')
+}
 
 // Additional trusted origins (comma separated) for auth CSRF / cookie handling.
 export const TRUSTED_ORIGINS = (process.env.TRUSTED_ORIGINS || '')
