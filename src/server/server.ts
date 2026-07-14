@@ -1,83 +1,201 @@
+import { existsSync } from 'fs'
+import { join } from 'path'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
+import fastifyStatic from '@fastify/static'
 import websocketPlugin from '@fastify/websocket'
 import fastify from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { RawData } from 'ws'
 import { loadAsset, storeAsset } from './assets'
+import { auth, getSessionFromHeaders, migrateAuth, seedAdminUser } from './auth'
+import {
+	IS_PRODUCTION,
+	MAX_UPLOAD_BYTES,
+	PORT,
+	R2_ENABLED,
+	isValidRoomSlug,
+} from './config'
 import { makeOrLoadRoom } from './rooms'
+import { createRoom, listRooms } from './roomStore'
 import { unfurl } from './unfurl'
 
-const PORT = 5858
+const CLIENT_DIST = join(process.cwd(), 'dist', 'client')
 
-// For this example we use a simple fastify server with the official websocket plugin
-// To keep things simple we're skipping normal production concerns like rate limiting and input validation.
-const app = fastify()
-app.register(websocketPlugin)
-app.register(cors, { origin: '*' })
+// Only these prefixes require an authenticated session. Everything else (the
+// SPA shell, the login page, static assets, and the /api/auth/* endpoints) is
+// public so the login flow can work.
+const PROTECTED_PREFIXES = ['/connect', '/uploads', '/unfurl', '/api/rooms']
 
-app.register(async (app) => {
-	// This is the main entrypoint for the multiplayer sync
+function isProtected(pathname: string): boolean {
+	return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))
+}
+
+async function main() {
+	// Auth database schema + single admin user.
+	await migrateAuth()
+	await seedAdminUser()
+
+	const app = fastify({
+		// Traefik forwards X-Forwarded-For; trust it for correct client IPs.
+		trustProxy: true,
+		bodyLimit: MAX_UPLOAD_BYTES,
+	})
+
+	// Rate limiting: sane global default; stricter per-route overrides below.
+	await app.register(rateLimit, {
+		global: true,
+		max: 300,
+		timeWindow: '1 minute',
+	})
+
+	// CORS: credentialed. Same-origin in production; the Vite dev server proxies
+	// requests in development so this stays permissive-but-credentialed.
+	await app.register(cors, { origin: true, credentials: true })
+
+	await app.register(websocketPlugin)
+
+	// Allow raw (unparsed) bodies for binary asset uploads. The default JSON
+	// parser is left intact for /api/rooms and the auth endpoints.
+	app.addContentTypeParser('*', (_req, _payload, done) => done(null))
+
+	// --- Auth guard (runs before every request) -----------------------------
+	app.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
+		const pathname = req.url.split('?')[0]
+		if (!isProtected(pathname)) return
+		const session = await getSessionFromHeaders(req.headers)
+		if (!session) {
+			// For the WS upgrade this 401 aborts the handshake and no socket is
+			// established.
+			reply.code(401).send({ error: 'Unauthorized' })
+		}
+	})
+
+	// --- Better Auth handler (/api/auth/*) -----------------------------------
+	app.route({
+		method: ['GET', 'POST'],
+		url: '/api/auth/*',
+		config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+		async handler(req, reply) {
+			const url = new URL(req.url, `${req.protocol}://${req.headers.host}`)
+			const headers = new Headers()
+			for (const [key, value] of Object.entries(req.headers)) {
+				if (Array.isArray(value)) value.forEach((v) => headers.append(key, v))
+				else if (value != null) headers.append(key, String(value))
+			}
+			let body: string | undefined
+			if (req.method !== 'GET' && req.method !== 'HEAD' && req.body != null) {
+				body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
+			}
+			const request = new Request(url.toString(), { method: req.method, headers, body })
+			const response = await auth.handler(request)
+
+			reply.code(response.status)
+			response.headers.forEach((value, key) => {
+				if (key.toLowerCase() !== 'set-cookie') reply.header(key, value)
+			})
+			// Preserve multiple Set-Cookie headers individually.
+			const setCookies = (response.headers as any).getSetCookie?.() as string[] | undefined
+			if (setCookies) for (const c of setCookies) reply.header('set-cookie', c)
+
+			const text = await response.text()
+			reply.send(text || null)
+		},
+	})
+
+	// --- Room metadata API (list / create) ----------------------------------
+	app.get('/api/rooms', async () => {
+		return { rooms: listRooms() }
+	})
+
+	app.post('/api/rooms', async (req, reply) => {
+		const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) as {
+			name?: string
+		} | null
+		const name = body?.name?.trim()
+		if (!name) return reply.code(400).send({ error: 'Room name is required' })
+		try {
+			const room = createRoom(name)
+			return reply.code(201).send({ room })
+		} catch (err: any) {
+			return reply.code(400).send({ error: String(err?.message || err) })
+		}
+	})
+
+	// --- Multiplayer sync WebSocket ------------------------------------------
 	app.get('/connect/:roomId', { websocket: true }, async (socket, req) => {
-		// The roomId comes from the URL pathname
 		const roomId = (req.params as any).roomId as string
-		// The sessionId is passed from the client as a query param,
-		// you need to extract it and pass it to the room.
 		const sessionId = (req.query as any)?.['sessionId'] as string
 
-		// At least one message handler needs to
-		// be attached before doing any kind of async work
-		// https://github.com/fastify/fastify-websocket?tab=readme-ov-file#attaching-event-handlers
-		// We collect messages that came in before the room was loaded, and re-emit them
-		// after the room is loaded.
-		const caughtMessages: RawData[] = []
-
-		const collectMessagesListener = (message: RawData) => {
-			caughtMessages.push(message)
+		if (!isValidRoomSlug(roomId)) {
+			socket.close(1008, 'Invalid room id')
+			return
 		}
 
+		// Collect messages that arrive before the room finishes loading.
+		const caughtMessages: RawData[] = []
+		const collectMessagesListener = (message: RawData) => caughtMessages.push(message)
 		socket.on('message', collectMessagesListener)
 
-		// Here we make or get an existing instance of TLSocketRoom for the given roomId
 		const room = makeOrLoadRoom(roomId)
-		// and finally connect the socket to the room
 		room.handleSocketConnect({ sessionId, socket })
 
 		socket.off('message', collectMessagesListener)
+		for (const message of caughtMessages) socket.emit('message', message)
+	})
 
-		// Finally, we replay any caught messages so the room can process them
-		for (const message of caughtMessages) {
-			socket.emit('message', message)
+	// --- Asset upload / download (proxied, behind auth) ----------------------
+	app.put(
+		'/uploads/:id',
+		{ config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+		async (req, reply) => {
+			const id = (req.params as any).id as string
+			const contentType = req.headers['content-type']
+			try {
+				await storeAsset(id, req.raw, contentType)
+				return reply.send({ ok: true })
+			} catch (err: any) {
+				return reply.code(err?.statusCode || 500).send({ error: String(err?.message || err) })
+			}
 		}
+	)
+
+	app.get('/uploads/:id', async (req, reply) => {
+		const id = (req.params as any).id as string
+		const asset = await loadAsset(id)
+		// Prevent XSS from user-uploaded SVGs.
+		reply.header('Content-Security-Policy', "default-src 'none'")
+		reply.header('X-Content-Type-Options', 'nosniff')
+		reply.header('Content-Type', asset.contentType)
+		if (asset.contentLength != null) reply.header('Content-Length', asset.contentLength)
+		return reply.send(asset.body)
 	})
 
-	// To enable blob storage for assets, we add a simple endpoint supporting PUT and GET requests
-	// But first we need to allow all content types with no parsing, so we can handle raw data
-	app.addContentTypeParser('*', (_, __, done) => done(null))
-	app.put('/uploads/:id', {}, async (req, res) => {
-		const id = (req.params as any).id as string
-		await storeAsset(id, req.raw)
-		res.send({ ok: true })
-	})
-	app.get('/uploads/:id', async (req, res) => {
-		const id = (req.params as any).id as string
-		const data = await loadAsset(id)
-		// Prevent XSS from user-uploaded SVGs
-		res.header('Content-Security-Policy', "default-src 'none'")
-		res.header('X-Content-Type-Options', 'nosniff')
-		res.send(data)
-	})
-
-	// To enable unfurling of bookmarks, we add a simple endpoint that takes a URL query param
-	app.get('/unfurl', async (req, res) => {
+	// --- Bookmark unfurling ---------------------------------------------------
+	app.get('/unfurl', async (req, reply) => {
 		const url = (req.query as any).url as string
-		res.send(await unfurl(url))
+		return reply.send(await unfurl(url))
 	})
-})
 
-app.listen({ port: PORT }, (err) => {
-	if (err) {
-		console.error(err)
-		process.exit(1)
+	// --- Static SPA (production) ---------------------------------------------
+	if (existsSync(CLIENT_DIST)) {
+		await app.register(fastifyStatic, { root: CLIENT_DIST })
+		// SPA fallback: serve index.html for client-side routes (e.g. /r/<slug>).
+		app.setNotFoundHandler((req, reply) => {
+			if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/connect')) {
+				return reply.sendFile('index.html')
+			}
+			return reply.code(404).send({ error: 'Not found' })
+		})
 	}
 
-	console.log(`Server started on port ${PORT}`)
+	await app.listen({ port: PORT, host: '0.0.0.0' })
+	console.log(`[server] Canvas listening on port ${PORT}`)
+	console.log(`[server] assets backend: ${R2_ENABLED ? 'Cloudflare R2' : 'local disk (dev fallback)'}`)
+	console.log(`[server] mode: ${IS_PRODUCTION ? 'production' : 'development'}`)
+}
+
+main().catch((err) => {
+	console.error(err)
+	process.exit(1)
 })
