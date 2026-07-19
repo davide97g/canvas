@@ -164,9 +164,11 @@ async function main() {
 	})
 
 	// --- Asset upload / download (proxied, behind auth) ----------------------
+	// Pasting/importing a scene with many images fires one PUT per image in a
+	// burst, so the limit must comfortably exceed a single large paste.
 	app.put(
 		'/uploads/:id',
-		{ config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+		{ config: { rateLimit: { max: 200, timeWindow: '1 minute' } } },
 		async (req, reply) => {
 			const id = (req.params as any).id as string
 			const contentType = req.headers['content-type']

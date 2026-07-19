@@ -1,11 +1,21 @@
 import { useSync } from '@tldraw/sync'
 import {
 	AssetRecordType,
+	DefaultMainMenu,
+	DefaultMainMenuContent,
+	Editor as TldrawEditor,
 	getHashForString,
+	putExcalidrawContent,
 	TLAssetStore,
 	TLBookmarkAsset,
+	TLComponents,
 	Tldraw,
+	TldrawUiMenuGroup,
+	TldrawUiMenuItem,
+	TLUiToastsContextType,
 	uniqueId,
+	useEditor,
+	useToasts,
 } from 'tldraw'
 
 const LICENSE_KEY = import.meta.env.VITE_TLDRAW_LICENSE_KEY as string | undefined
@@ -13,6 +23,23 @@ const LICENSE_KEY = import.meta.env.VITE_TLDRAW_LICENSE_KEY as string | undefine
 function wsUri(roomId: string): string {
 	const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
 	return `${proto}://${window.location.host}/connect/${encodeURIComponent(roomId)}`
+}
+
+const MAX_UPLOAD_ATTEMPTS = 5
+
+// Bulk pastes/imports upload many assets at once and can trip the server's
+// rate limit; honor Retry-After on 429 instead of dropping the image.
+async function uploadWithRetry(url: string, file: File): Promise<Response> {
+	for (let attempt = 1; ; attempt++) {
+		const response = await fetch(url, {
+			method: 'PUT',
+			body: file,
+			headers: file.type ? { 'Content-Type': file.type } : undefined,
+		})
+		if (response.status !== 429 || attempt >= MAX_UPLOAD_ATTEMPTS) return response
+		const retryAfter = Number(response.headers.get('retry-after')) || 2 ** attempt
+		await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000))
+	}
 }
 
 // Assets are proxied through our own (authenticated) server. Cookies are sent
@@ -23,11 +50,7 @@ const multiplayerAssets: TLAssetStore = {
 		const objectName = `${id}-${file.name}`.replace(/[^a-zA-Z0-9.-]/g, '-')
 		const url = `/uploads/${encodeURIComponent(objectName)}`
 
-		const response = await fetch(url, {
-			method: 'PUT',
-			body: file,
-			headers: file.type ? { 'Content-Type': file.type } : undefined,
-		})
+		const response = await uploadWithRetry(url, file)
 		if (!response.ok) {
 			throw new Error(`Failed to upload asset: ${response.statusText}`)
 		}
@@ -59,6 +82,69 @@ async function unfurlBookmarkUrl({ url }: { url: string }): Promise<TLBookmarkAs
 	return asset
 }
 
+function pickExcalidrawFile(): Promise<File | null> {
+	return new Promise((resolve) => {
+		const input = document.createElement('input')
+		input.type = 'file'
+		input.accept = '.excalidraw,application/json,.json'
+		input.onchange = () => resolve(input.files?.[0] ?? null)
+		input.oncancel = () => resolve(null)
+		input.click()
+	})
+}
+
+async function importExcalidraw(editor: TldrawEditor, toasts: TLUiToastsContextType) {
+	const file = await pickExcalidrawFile()
+	if (!file) return
+	try {
+		const data = JSON.parse(await file.text())
+		if (data?.type !== 'excalidraw' || !Array.isArray(data.elements)) {
+			throw new Error('Not an Excalidraw file')
+		}
+		const elements = data.elements.filter((el: any) => !el.isDeleted)
+		await putExcalidrawContent(
+			editor,
+			{ type: 'excalidraw/clipboard', elements, files: data.files ?? {} },
+			editor.getViewportPageBounds().center
+		)
+		editor.zoomToSelection({ animation: { duration: 220 } })
+		toasts.addToast({
+			title: 'Imported from Excalidraw',
+			description: `${elements.length} element${elements.length === 1 ? '' : 's'} added.`,
+			severity: 'success',
+		})
+	} catch (err) {
+		console.error(err)
+		toasts.addToast({
+			title: 'Import failed',
+			description: 'The selected file is not a valid .excalidraw file.',
+			severity: 'error',
+		})
+	}
+}
+
+function CustomMainMenu() {
+	const editor = useEditor()
+	const toasts = useToasts()
+	return (
+		<DefaultMainMenu>
+			<DefaultMainMenuContent />
+			<TldrawUiMenuGroup id="excalidraw">
+				<TldrawUiMenuItem
+					id="import-excalidraw"
+					label="Import from Excalidraw"
+					readonlyOk={false}
+					onSelect={() => void importExcalidraw(editor, toasts)}
+				/>
+			</TldrawUiMenuGroup>
+		</DefaultMainMenu>
+	)
+}
+
+const components: TLComponents = {
+	MainMenu: CustomMainMenu,
+}
+
 export function Editor({ roomId }: { roomId: string }) {
 	const store = useSync({
 		uri: wsUri(roomId),
@@ -70,6 +156,7 @@ export function Editor({ roomId }: { roomId: string }) {
 			<Tldraw
 				store={store}
 				licenseKey={LICENSE_KEY}
+				components={components}
 				onMount={(editor) => {
 					;(window as any).editor = editor
 					editor.registerExternalAssetHandler('url', unfurlBookmarkUrl)
