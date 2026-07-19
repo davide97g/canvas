@@ -82,6 +82,21 @@ async function unfurlBookmarkUrl({ url }: { url: string }): Promise<TLBookmarkAs
 	return asset
 }
 
+// tldraw's putExcalidrawContent maps strokeWidth via a lookup that only knows
+// 1/2/3/4 and (for freedraw) has no fallback, so any other width produces
+// `size: undefined` and a store ValidationError. Snap widths to the nearest
+// known value before conversion.
+function normalizeExcalidrawContent<T extends { elements?: any[] }>(content: T): T {
+	if (!Array.isArray(content.elements)) return content
+	return {
+		...content,
+		elements: content.elements.map((el: any) => {
+			const width = typeof el?.strokeWidth === 'number' ? el.strokeWidth : 1
+			return { ...el, strokeWidth: Math.min(4, Math.max(1, Math.round(width))) }
+		}),
+	}
+}
+
 function pickExcalidrawFile(): Promise<File | null> {
 	return new Promise((resolve) => {
 		const input = document.createElement('input')
@@ -104,7 +119,11 @@ async function importExcalidraw(editor: TldrawEditor, toasts: TLUiToastsContextT
 		const elements = data.elements.filter((el: any) => !el.isDeleted)
 		await putExcalidrawContent(
 			editor,
-			{ type: 'excalidraw/clipboard', elements, files: data.files ?? {} },
+			normalizeExcalidrawContent({
+				type: 'excalidraw/clipboard',
+				elements,
+				files: data.files ?? {},
+			}),
 			editor.getViewportPageBounds().center
 		)
 		editor.zoomToSelection({ animation: { duration: 220 } })
@@ -160,6 +179,13 @@ export function Editor({ roomId }: { roomId: string }) {
 				onMount={(editor) => {
 					;(window as any).editor = editor
 					editor.registerExternalAssetHandler('url', unfurlBookmarkUrl)
+					// Override the default paste handler so pasted Excalidraw
+					// content gets the same strokeWidth normalization as imports.
+					editor.registerExternalContentHandler('excalidraw', async ({ point, content }) => {
+						editor.run(() => {
+							putExcalidrawContent(editor, normalizeExcalidrawContent(content), point)
+						})
+					})
 				}}
 			/>
 		</div>
