@@ -1,3 +1,4 @@
+import { rmSync } from 'fs'
 import { join } from 'path'
 import { NodeSqliteWrapper, SQLiteSyncStorage, TLSocketRoom } from '@tldraw/sync-core'
 import Database from 'better-sqlite3'
@@ -43,4 +44,24 @@ export function makeOrLoadRoom(roomId: string): TLSocketRoom<any, void> {
 
 	rooms.set(roomId, { room, db })
 	return room
+}
+
+// Close a room's sockets + database handle (if loaded) and remove its SQLite
+// files from disk. Used when a board is deleted from the picker.
+export function destroyRoomData(roomId: string): void {
+	if (!isValidRoomSlug(roomId)) {
+		throw new Error(`Invalid room id: ${roomId}`)
+	}
+
+	const existing = rooms.get(roomId)
+	if (existing) {
+		if (!existing.room.isClosed()) existing.room.close()
+		existing.db.close()
+		rooms.delete(roomId)
+	}
+
+	const base = join(ROOMS_DIR, `${roomId}.db`)
+	for (const file of [base, `${base}-wal`, `${base}-shm`]) {
+		rmSync(file, { force: true })
+	}
 }

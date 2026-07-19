@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react'
 import { signIn } from './authClient'
+import { CosmicBackdrop } from './CosmicBackdrop'
 
 export function Login() {
 	const [email, setEmail] = useState('')
@@ -23,11 +24,15 @@ export function Login() {
 
 	return (
 		<div className="auth-shell">
+			<CosmicBackdrop />
 			<form className="card auth-card" onSubmit={onSubmit}>
 				<div className="brand">
 					<span className="brand-glyph">DG</span>
 					<h1>Canvas</h1>
 				</div>
+				<p className="auth-tagline">
+					Welcome back, <span className="hero-gradient">stargazer</span>
+				</p>
 				<p className="muted">Sign in to your whiteboards</p>
 
 				<label>

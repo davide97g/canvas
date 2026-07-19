@@ -18,8 +18,8 @@ import {
 	TRUSTED_ORIGINS,
 	isValidRoomSlug,
 } from './config'
-import { makeOrLoadRoom } from './rooms'
-import { createRoom, listRooms } from './roomStore'
+import { destroyRoomData, makeOrLoadRoom } from './rooms'
+import { createRoom, deleteRoom, getRoom, listRooms } from './roomStore'
 import { unfurl } from './unfurl'
 
 const CLIENT_DIST = join(process.cwd(), 'dist', 'client')
@@ -125,6 +125,19 @@ async function main() {
 			return reply.code(201).send({ room })
 		} catch (err: any) {
 			return reply.code(400).send({ error: String(err?.message || err) })
+		}
+	})
+
+	app.delete('/api/rooms/:slug', async (req, reply) => {
+		const slug = (req.params as any).slug as string
+		if (!isValidRoomSlug(slug)) return reply.code(400).send({ error: 'Invalid room id' })
+		if (!getRoom(slug)) return reply.code(404).send({ error: 'Board not found' })
+		try {
+			destroyRoomData(slug)
+			deleteRoom(slug)
+			return reply.send({ ok: true })
+		} catch (err: any) {
+			return reply.code(500).send({ error: String(err?.message || err) })
 		}
 	})
 

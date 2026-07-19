@@ -1,16 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Space+Mono:wght@400;700&display=swap');
 @import url('tldraw/tldraw.css');
 
+/*
+ * Galaxy theme — deep-space void, nebula blues/violets/magentas, starlight text.
+ * Palette sampled from the cosmic reference artwork.
+ */
 :root {
-	--bg: #0d0f14;
-	--bg-elev: #161a22;
-	--bg-input: #0f1219;
-	--border: #262c38;
-	--text: #e8eaf0;
-	--muted: #8b93a7;
-	--accent: #4f7cff;
-	--accent-hover: #6a90ff;
-	--danger: #ff6b6b;
+	--void: #04040c;
+	--bg: var(--void);
+	--bg-elev: rgba(16, 18, 43, 0.72);
+	--bg-input: rgba(7, 8, 20, 0.85);
+	--border: rgba(125, 135, 200, 0.22);
+	--text: #eef1ff;
+	--muted: #97a0c6;
+	--nebula-blue: #3d7bff;
+	--nebula-violet: #8b5cf6;
+	--nebula-magenta: #e879f9;
+	--star-cyan: #6ee7f9;
+	--accent: var(--nebula-blue);
+	--danger: #ff6b8b;
+	--font-sans: 'Space Grotesk', system-ui, sans-serif;
+	--font-mono: 'Space Mono', ui-monospace, monospace;
+	--nebula-gradient: linear-gradient(
+		120deg,
+		var(--star-cyan),
+		var(--nebula-blue) 35%,
+		var(--nebula-violet) 65%,
+		var(--nebula-magenta)
+	);
 }
 
 * {
@@ -24,7 +41,7 @@ body {
 }
 
 body {
-	font-family: 'Inter', system-ui, sans-serif;
+	font-family: var(--font-sans);
 	overscroll-behavior: none;
 	background: var(--bg);
 	color: var(--text);
@@ -35,19 +52,96 @@ body {
 }
 
 .error {
-	background: rgba(255, 107, 107, 0.12);
-	border: 1px solid rgba(255, 107, 107, 0.4);
+	background: rgba(255, 107, 139, 0.1);
+	border: 1px solid rgba(255, 107, 139, 0.4);
 	color: var(--danger);
-	padding: 10px 12px;
-	border-radius: 8px;
+	padding: 10px 14px;
+	border-radius: 10px;
 	font-size: 14px;
+	position: relative;
+	z-index: 1;
 }
 
+/* --- Cosmic backdrop ------------------------------------------------------ */
+.cosmos {
+	position: fixed;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	z-index: 0;
+}
+
+/* Nebula bloom */
+.cosmos::before {
+	content: '';
+	position: absolute;
+	inset: -20%;
+	background:
+		radial-gradient(45% 55% at 50% 8%, rgba(61, 123, 255, 0.22), transparent 70%),
+		radial-gradient(35% 45% at 82% 28%, rgba(139, 92, 246, 0.16), transparent 70%),
+		radial-gradient(30% 40% at 12% 72%, rgba(232, 121, 249, 0.1), transparent 70%),
+		radial-gradient(25% 30% at 68% 85%, rgba(110, 231, 249, 0.08), transparent 70%);
+}
+
+/* Dust: tiny static stars */
+.cosmos::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background-image:
+		radial-gradient(1px 1px at 11% 24%, rgba(255, 255, 255, 0.9), transparent 100%),
+		radial-gradient(1px 1px at 31% 68%, rgba(255, 255, 255, 0.55), transparent 100%),
+		radial-gradient(1.5px 1.5px at 47% 15%, rgba(190, 210, 255, 0.8), transparent 100%),
+		radial-gradient(1px 1px at 62% 44%, rgba(255, 255, 255, 0.5), transparent 100%),
+		radial-gradient(1.5px 1.5px at 74% 74%, rgba(210, 190, 255, 0.7), transparent 100%),
+		radial-gradient(1px 1px at 88% 12%, rgba(255, 255, 255, 0.75), transparent 100%),
+		radial-gradient(1px 1px at 21% 88%, rgba(190, 230, 255, 0.6), transparent 100%),
+		radial-gradient(1.5px 1.5px at 93% 56%, rgba(255, 255, 255, 0.65), transparent 100%),
+		radial-gradient(1px 1px at 54% 92%, rgba(255, 255, 255, 0.45), transparent 100%),
+		radial-gradient(1px 1px at 5% 48%, rgba(255, 220, 240, 0.6), transparent 100%);
+}
+
+.cosmos-star {
+	position: absolute;
+	color: #dfe7ff;
+	text-shadow:
+		0 0 6px rgba(110, 231, 249, 0.9),
+		0 0 18px rgba(61, 123, 255, 0.6);
+	animation: twinkle 4.5s ease-in-out infinite;
+	line-height: 1;
+}
+
+@keyframes twinkle {
+	0%,
+	100% {
+		opacity: 0.25;
+		transform: scale(0.8) rotate(0deg);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.15) rotate(12deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cosmos-star {
+		animation: none;
+		opacity: 0.7;
+	}
+}
+
+/* --- Shared chrome -------------------------------------------------------- */
 .card {
 	background: var(--bg-elev);
-	border: 1px solid var(--border);
-	border-radius: 16px;
+	border: 1px solid transparent;
+	background:
+		linear-gradient(var(--bg-elev), var(--bg-elev)) padding-box,
+		linear-gradient(140deg, rgba(110, 231, 249, 0.35), rgba(61, 123, 255, 0.3) 40%, rgba(232, 121, 249, 0.25)) border-box;
+	border-radius: 18px;
 	padding: 28px;
+	backdrop-filter: blur(10px);
+	position: relative;
+	z-index: 1;
 }
 
 .brand {
@@ -60,7 +154,7 @@ body {
 	font-size: 22px;
 	margin: 0;
 	font-weight: 700;
-	letter-spacing: -0.02em;
+	letter-spacing: 0.01em;
 }
 
 .brand-glyph {
@@ -69,23 +163,42 @@ body {
 	justify-content: center;
 	width: 40px;
 	height: 40px;
-	border-radius: 10px;
-	background: linear-gradient(135deg, var(--accent), #7b5cff);
+	border-radius: 12px;
+	background: var(--nebula-gradient);
 	color: #fff;
 	font-weight: 700;
-	font-size: 16px;
+	font-size: 15px;
+	box-shadow: 0 0 18px rgba(61, 123, 255, 0.45);
 }
 
-/* --- Buttons --- */
+.eyebrow {
+	display: block;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.hero-gradient {
+	background: var(--nebula-gradient);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+/* --- Buttons --------------------------------------------------------------- */
 .btn {
 	border: 1px solid transparent;
 	border-radius: 10px;
-	padding: 10px 16px;
+	padding: 10px 18px;
 	font-size: 14px;
 	font-weight: 600;
 	font-family: inherit;
+	letter-spacing: 0.02em;
 	cursor: pointer;
-	transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+	transition: box-shadow 0.2s, border-color 0.15s, opacity 0.15s, filter 0.2s;
 }
 
 .btn:disabled {
@@ -94,12 +207,14 @@ body {
 }
 
 .btn.primary {
-	background: var(--accent);
+	background: linear-gradient(120deg, var(--nebula-blue), var(--nebula-violet));
 	color: #fff;
+	box-shadow: 0 0 14px rgba(61, 123, 255, 0.35);
 }
 
 .btn.primary:hover:not(:disabled) {
-	background: var(--accent-hover);
+	filter: brightness(1.12);
+	box-shadow: 0 0 24px rgba(139, 92, 246, 0.55);
 }
 
 .btn.ghost {
@@ -108,30 +223,54 @@ body {
 	border-color: var(--border);
 }
 
-.btn.ghost:hover {
+.btn.ghost:hover:not(:disabled) {
 	color: var(--text);
 	border-color: var(--muted);
 }
 
-/* --- Auth / login --- */
+.btn.danger {
+	background: linear-gradient(120deg, #ff5f7e, var(--nebula-magenta));
+	color: #fff;
+}
+
+.btn.danger:hover:not(:disabled) {
+	filter: brightness(1.1);
+	box-shadow: 0 0 18px rgba(232, 121, 249, 0.45);
+}
+
+:focus-visible {
+	outline: 2px solid var(--star-cyan);
+	outline-offset: 2px;
+}
+
+/* --- Auth / login ----------------------------------------------------------- */
 .auth-shell {
 	min-height: 100vh;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	padding: 24px;
+	position: relative;
 }
 
 .auth-card {
 	width: 100%;
-	max-width: 380px;
+	max-width: 400px;
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
 }
 
-.auth-card p {
+.auth-tagline {
+	margin: 6px 0 0;
+	font-size: 24px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.auth-card p.muted {
 	margin: 0 0 4px;
+	font-size: 14px;
 }
 
 label {
@@ -152,18 +291,20 @@ input {
 	font-size: 15px;
 	font-family: inherit;
 	outline: none;
-	transition: border-color 0.15s;
+	transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 input:focus {
-	border-color: var(--accent);
+	border-color: var(--nebula-blue);
+	box-shadow: 0 0 0 3px rgba(61, 123, 255, 0.2);
 }
 
-/* --- Room picker --- */
+/* --- Room picker ------------------------------------------------------------ */
 .picker-shell {
 	min-height: 100vh;
 	display: flex;
 	flex-direction: column;
+	position: relative;
 }
 
 .picker-header {
@@ -172,27 +313,47 @@ input:focus {
 	justify-content: space-between;
 	padding: 20px 28px;
 	border-bottom: 1px solid var(--border);
+	position: relative;
+	z-index: 1;
+	backdrop-filter: blur(6px);
 }
 
 .picker-main {
 	width: 100%;
-	max-width: 720px;
+	max-width: 760px;
 	margin: 0 auto;
-	padding: 32px 24px 64px;
+	padding: 48px 24px 64px;
 	display: flex;
 	flex-direction: column;
 	gap: 28px;
+	position: relative;
+	z-index: 1;
 }
 
-.create-card h2,
-.section-title {
+.picker-hero {
+	text-align: center;
+	margin-bottom: 4px;
+}
+
+.hero-title {
+	font-size: clamp(28px, 5vw, 40px);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	margin: 0 0 8px;
+}
+
+.hero-sub {
+	margin: 0;
+	color: var(--muted);
 	font-size: 15px;
-	font-weight: 600;
-	margin: 0 0 14px;
+}
+
+.create-card .eyebrow {
+	margin-bottom: 14px;
 }
 
 .section-title {
-	margin-bottom: 12px;
+	margin: 0 0 14px;
 }
 
 .create-row {
@@ -209,38 +370,123 @@ input:focus {
 	margin: 0;
 	padding: 0;
 	display: grid;
-	gap: 10px;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 12px;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.room-cell {
+	position: relative;
 }
 
 .room-item {
 	width: 100%;
+	min-height: 96px;
 	text-align: left;
-	background: var(--bg-elev);
-	border: 1px solid var(--border);
-	border-radius: 12px;
-	padding: 16px;
+	border: 1px solid transparent;
+	background:
+		linear-gradient(var(--bg-elev), var(--bg-elev)) padding-box,
+		linear-gradient(140deg, rgba(125, 135, 200, 0.35), rgba(125, 135, 200, 0.15)) border-box;
+	border-radius: 14px;
+	padding: 18px 16px 16px;
 	cursor: pointer;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 5px;
 	font-family: inherit;
 	color: var(--text);
-	transition: border-color 0.15s, transform 0.1s;
+	backdrop-filter: blur(8px);
+	transition: box-shadow 0.2s, transform 0.15s, background 0.2s;
 }
 
 .room-item:hover {
-	border-color: var(--accent);
-	transform: translateY(-1px);
+	background:
+		linear-gradient(var(--bg-elev), var(--bg-elev)) padding-box,
+		var(--nebula-gradient) border-box;
+	transform: translateY(-2px);
+	box-shadow: 0 6px 28px rgba(61, 123, 255, 0.25);
+}
+
+.room-star {
+	color: var(--star-cyan);
+	font-size: 13px;
+	text-shadow: 0 0 8px rgba(110, 231, 249, 0.8);
 }
 
 .room-name {
 	font-weight: 600;
-	font-size: 15px;
+	font-size: 16px;
+	letter-spacing: -0.01em;
 }
 
 .room-slug {
 	font-size: 12px;
 	color: var(--muted);
-	font-family: ui-monospace, monospace;
+	font-family: var(--font-mono);
+}
+
+.room-delete {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.room-cell:hover .room-delete,
+.room-delete:focus-visible {
+	opacity: 1;
+}
+
+/* No hover on touch devices — keep the delete affordance visible. */
+@media (hover: none) {
+	.room-delete {
+		opacity: 1;
+	}
+}
+
+.room-delete:hover {
+	color: var(--danger);
+	border-color: rgba(255, 107, 139, 0.4);
+	background: rgba(255, 107, 139, 0.1);
+}
+
+.room-confirm {
+	cursor: default;
+	justify-content: center;
+}
+
+.room-confirm-text {
+	font-size: 13px;
+	color: var(--text);
+}
+
+.room-confirm-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.room-confirm-actions .btn {
+	padding: 7px 14px;
+	font-size: 13px;
+}
+
+@media (max-width: 480px) {
+	.create-row {
+		flex-direction: column;
+	}
+
+	.picker-main {
+		padding-top: 32px;
+	}
 }

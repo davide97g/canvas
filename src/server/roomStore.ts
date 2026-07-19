@@ -24,6 +24,7 @@ export interface RoomMeta {
 const listStmt = db.prepare('SELECT slug, name, created_at as createdAt FROM rooms ORDER BY created_at DESC')
 const getStmt = db.prepare('SELECT slug, name, created_at as createdAt FROM rooms WHERE slug = ?')
 const insertStmt = db.prepare('INSERT OR IGNORE INTO rooms (slug, name, created_at) VALUES (?, ?, ?)')
+const deleteStmt = db.prepare('DELETE FROM rooms WHERE slug = ?')
 
 export function listRooms(): RoomMeta[] {
 	return listStmt.all() as RoomMeta[]
@@ -31,6 +32,10 @@ export function listRooms(): RoomMeta[] {
 
 export function getRoom(slug: string): RoomMeta | undefined {
 	return getStmt.get(slug) as RoomMeta | undefined
+}
+
+export function deleteRoom(slug: string): void {
+	deleteStmt.run(slug)
 }
 
 // Derive a valid slug from a human room name.
