@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from './authClient'
+import { BrandPaintLoader } from './BrandPaintLoader'
 import { Editor } from './Editor'
 import { Login } from './Login'
 import { RoomPicker } from './RoomPicker'
@@ -12,6 +13,7 @@ function currentRoomSlug(pathname: string): string | null {
 function App() {
 	const { data: session, isPending } = useSession()
 	const [path, setPath] = useState(window.location.pathname)
+	const [splashDone, setSplashDone] = useState(false)
 
 	useEffect(() => {
 		const onPop = () => setPath(window.location.pathname)
@@ -25,13 +27,10 @@ function App() {
 	}, [])
 
 	const openRoom = useCallback((slug: string) => navigate(`/r/${slug}`), [navigate])
+	const finishSplash = useCallback(() => setSplashDone(true), [])
 
-	if (isPending) {
-		return (
-			<div className="auth-shell">
-				<p className="muted">Loading…</p>
-			</div>
-		)
+	if (!splashDone) {
+		return <BrandPaintLoader pending={isPending} onDone={finishSplash} />
 	}
 
 	if (!session) {
