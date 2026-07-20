@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import canvasLogo from './assets/canvas-logo.png'
 
 const PALETTE = [
@@ -28,6 +28,7 @@ type Props = {
 export function BrandPaintLoader({ pending, onDone }: Props) {
 	const [minElapsed, setMinElapsed] = useState(false)
 	const [exiting, setExiting] = useState(false)
+	const finishedRef = useRef(false)
 
 	useEffect(() => {
 		const t = window.setTimeout(() => setMinElapsed(true), MIN_MS)
@@ -35,11 +36,17 @@ export function BrandPaintLoader({ pending, onDone }: Props) {
 	}, [])
 
 	useEffect(() => {
-		if (pending || !minElapsed || exiting) return
+		if (pending || !minElapsed || finishedRef.current) return
+
 		setExiting(true)
-		const t = window.setTimeout(onDone, EXIT_MS)
+		const t = window.setTimeout(() => {
+			if (finishedRef.current) return
+			finishedRef.current = true
+			onDone()
+		}, EXIT_MS)
+
 		return () => window.clearTimeout(t)
-	}, [pending, minElapsed, exiting, onDone])
+	}, [pending, minElapsed, onDone])
 
 	return (
 		<div
