@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { signOut } from './authClient'
 import { CosmicBackdrop } from './CosmicBackdrop'
+import canvasLogo from './assets/canvas-logo.png'
 
 interface RoomMeta {
 	slug: string
@@ -80,7 +81,7 @@ export function RoomPicker({ onOpenRoom }: { onOpenRoom: (slug: string) => void 
 			<CosmicBackdrop />
 			<header className="picker-header">
 				<div className="brand">
-					<span className="brand-glyph">DG</span>
+					<img className="brand-glyph" src={canvasLogo} alt="Canvas logo" />
 					<h1>Canvas</h1>
 				</div>
 				<button className="btn ghost" onClick={() => signOut().then(() => window.location.reload())}>

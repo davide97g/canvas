@@ -65,6 +65,12 @@ npm run build-client  # build the SPA to dist/client
 npm start             # run the production server (serves dist/client)
 ```
 
+## Brand asset
+
+`src/client/assets/canvas-logo.png` is the generated master logo. Run `npm run generate-logo-variants`
+to create its deterministic app-icon and favicon variants under `src/client/public/brand/`; it never
+generates new artwork.
+
 ## Environment variables
 
 | Variable | Required | Default | Description |

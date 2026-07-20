@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { signIn } from './authClient'
 import { CosmicBackdrop } from './CosmicBackdrop'
+import canvasLogo from './assets/canvas-logo.png'
 
 export function Login() {
 	const [email, setEmail] = useState('')
@@ -27,7 +28,7 @@ export function Login() {
 			<CosmicBackdrop />
 			<form className="card auth-card" onSubmit={onSubmit}>
 				<div className="brand">
-					<span className="brand-glyph">DG</span>
+					<img className="brand-glyph" src={canvasLogo} alt="Canvas logo" />
 					<h1>Canvas</h1>
 				</div>
 				<p className="auth-tagline">

@@ -15,6 +15,7 @@
 		"dev-client": "vite dev --host",
 		"build": "npm run build-client",
 		"build-client": "vite build",
+		"generate-logo-variants": "bash scripts/generate-logo-variants.sh",
 		"start": "tsx ./src/server/server.ts",
 		"typecheck": "tsc --noEmit"
 	},
