@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import canvasLogo from './assets/canvas-logo.png'
 
-const PALETTE = [
-	{ name: 'Cyan', color: '#6ee7f9' },
-	{ name: 'Blue', color: '#3d7bff' },
-	{ name: 'Violet', color: '#8b5cf6' },
-	{ name: 'Magenta', color: '#e879f9' },
+const CHIPS = [
+	{ label: 'projects', color: '#6ee7f9' },
+	{ label: 'ideas', color: '#3d7bff' },
+	{ label: 'brainstorming', color: '#8b5cf6' },
+	{ label: 'collaborate', color: '#e879f9' },
 ] as const
 
 /** Minimum time the splash stays visible so the reveal can finish. */
@@ -155,16 +155,16 @@ export function BrandPaintLoader({ pending, onDone }: Props) {
 					<span className="paint-logo-bloom" aria-hidden="true" />
 				</div>
 
-				{/* Color-reveal chips (Jitter Logo Tap vibe) */}
+				{/* Word chips burst after the color reveal */}
 				<ul className="paint-chips" aria-hidden="true">
-					{PALETTE.map((swatch, i) => (
+					{CHIPS.map((chip, i) => (
 						<li
-							key={swatch.name}
+							key={chip.label}
 							className={`paint-chip paint-chip-${i}`}
-							style={{ '--chip': swatch.color } as CSSProperties}
+							style={{ '--chip': chip.color } as CSSProperties}
 						>
 							<span className="paint-chip-swatch" />
-							<span className="paint-chip-label">{swatch.name}</span>
+							<span className="paint-chip-label">{chip.label}</span>
 						</li>
 					))}
 				</ul>

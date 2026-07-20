@@ -462,9 +462,10 @@ body {
 	font-family: var(--font-mono);
 	font-size: 10px;
 	font-weight: 700;
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	text-transform: lowercase;
 	color: var(--text);
+	white-space: nowrap;
 }
 
 /* Burst directions — tap / color-reveal layout */
